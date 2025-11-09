@@ -22,6 +22,8 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "queue.h"
+
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 
@@ -53,6 +55,8 @@ void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 /* USER CODE BEGIN PFP */
 
+QueueHandle_t queue;
+
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -69,51 +73,22 @@ void vApplicationMallocFailedHook(void) {
   }
 }
 
-void vWorker(void *pvParameters) {
-  int Ntask = (int)(intptr_t)pvParameters;
-  const char *taskName = pcTaskGetName(NULL);
-
-  task_context_t* context = pvPortMalloc(sizeof(task_context_t));
-  strcpy(context->name, taskName);
-  context->iter = 0;
-  context->bcnt = 0;
-
-  profile_t* profile = pvPortMalloc(sizeof(profile_t));
-
-  vTaskSetThreadLocalStoragePointer( NULL, 0, ( void * ) profile);
-  vTaskSetThreadLocalStoragePointer( NULL, 1, ( void * ) context);
-
-  int Ni = 10 * Ntask + IDX;
-
-  for (int i = 0; i < Ni; i++) {
-    context->iter++;
-    context->checksum = crc8_sae_j1850((unsigned char*)context->seed + context->iter, 4);
-
-    char logBuffer[128];
-    TickType_t currentTick = xTaskGetTickCount();
-    snprintf(logBuffer, sizeof(logBuffer),
-             "[Task %s] Tick:%lu Iter:%ld Sum:0x%02lX\n",
-             context->name,
-             (unsigned long)currentTick,
-             context->iter,
-             context->checksum);
-
-    log_or_burst(context, logBuffer);
+void Producer(void *pvParameters) {
+  TickType_t start = xTaskGetTickCount();
+  char* messageToSend = "ping";
+  while (1) {
+    xQueueSend(queue, &messageToSend, pdMS_TO_TICKS(1000));
+    xTaskDelayUntil(&start, pdMS_TO_TICKS(1000));
   }
+}
 
-  for (int i = 0; i < base_cycles + 800 * Ni; i++) {
-    __NOP();
+void Consumer(void *pvParameters) {
+  char* message;
+  while (1) {
+    if (xQueueReceive(queue, &message, pdMS_TO_TICKS(1000)) == pdPASS) {
+      printf("[Recv: %ld] Received message: %s\n", (unsigned long)xTaskGetTickCount(), message);
+    }
   }
-
-  if (context->bcnt > 0) {
-    burst_flush(context);
-  }
-  printf("Task: %d finished", Ntask);
-
-  vPortFree(context);
-  vPortFree(profile);
-
-  vTaskDelete(NULL);
 }
 
 /* USER CODE END 0 */
@@ -147,16 +122,19 @@ int main(void)
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
   /* USER CODE BEGIN 2 */
-  for (int i = 0; i < 4; i++) {
 
-    char task_name[] = "Task  ";
-    task_name[5] = (char)((int)'0' + i);
+  queue = xQueueCreate(10, sizeof(char*));
 
-    result = xTaskCreate(vWorker, task_name, 1024, (void*)(uintptr_t)i, 1, NULL);
-    if (result != pdPASS) {
-      Error_Handler();
-    }
+  result = xTaskCreate(Producer, "Producer", 512, NULL, 1, NULL);
+  if (result != pdPASS) {
+    Error_Handler();
   }
+
+  result = xTaskCreate(Consumer, "Consumer", 512, NULL, 1, NULL);
+  if (result != pdPASS) {
+    Error_Handler();
+  }
+
   vTaskStartScheduler();
   Error_Handler();
   /* USER CODE END 2 */
