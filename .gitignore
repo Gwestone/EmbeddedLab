@@ -1,0 +1,123 @@
+# Build directories
+build/
+cmake-build-*/
+out/
+
+# CMake generated files
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile
+*.cmake
+!CMakeLists.txt
+
+# Compiled Object files
+*.o
+*.obj
+*.elf
+*.bin
+*.hex
+*.map
+*.lst
+*.su
+*.d
+
+# Linker output
+*.ilk
+*.exp
+
+# Libraries
+*.lib
+*.a
+*.la
+*.lo
+
+# Shared objects
+*.dll
+*.so
+*.so.*
+*.dylib
+
+# Executables
+*.exe
+*.out
+*.app
+
+# Debug files
+*.dSYM/
+*.su
+*.idb
+*.pdb
+
+# IDE specific files
+# VSCode
+.vscode/
+*.code-workspace
+
+# CLion / IntelliJ
+.idea/
+*.iml
+*.iws
+
+# Eclipse
+.cproject
+.project
+.settings/
+
+# STM32CubeIDE
+.metadata/
+.mxproject
+Debug/
+Release/
+
+# Keil
+*.uvopt
+*.uvoptx
+*.uvgui.*
+*.bak
+*.dep
+*.axf
+
+# IAR
+Debug/
+Release/
+settings/
+*.dep
+*.ewt
+*.dni
+*.wsdt
+*.debugger
+
+# Logs and databases
+*.log
+*.sql
+*.sqlite
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+*~
+
+# Temporary files
+*.tmp
+*.temp
+*.swp
+*.swo
+*~
+
+# Core dumps
+core
+core.*
+
+# Python (if using scripts)
+__pycache__/
+*.py[cod]
+*$py.class
+.Pyth
+
+Drivers/*
