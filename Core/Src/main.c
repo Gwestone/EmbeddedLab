@@ -20,6 +20,7 @@
 #include "main.h"
 
 #include <stdio.h>
+#include <string.h>
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
@@ -68,87 +69,51 @@ void vApplicationMallocFailedHook(void) {
   }
 }
 
-void YUSH_periodic_1(void *pvParameters) {
-  const TickType_t T1 = pdMS_TO_TICKS(140);
-  const TickType_t C1 = pdMS_TO_TICKS(30);
-  TickType_t xLastWakeTime = xTaskGetTickCount();
+void vWorker(void *pvParameters) {
+  int Ntask = (int)(intptr_t)pvParameters;
+  task_context_t* context = pvPortMalloc(sizeof(task_context_t));
+  strcpy(context->name, "LAB2");
+  context->iter = 0;
+  context->bcnt = 0;
 
-  char buffer[64];
+  profile_t* profile = pvPortMalloc(sizeof(profile_t));
 
-  for (;;) {
-    TickType_t beforeDelay = xTaskGetTickCount();
-    xTaskDelayUntil(&xLastWakeTime, T1);
-    TickType_t afterDelay = xTaskGetTickCount();
+  vTaskSetThreadLocalStoragePointer( NULL, 0, ( void * ) profile);
+  vTaskSetThreadLocalStoragePointer( NULL, 1, ( void * ) context);
 
-    if ((long)(afterDelay - xLastWakeTime) > 0) {
-      snprintf(buffer, sizeof(buffer), "1s: expected=%lu, actual=%lu, diff=%ld\n",
-          (unsigned long)xLastWakeTime,
-          (unsigned long)afterDelay,
-          (long)(afterDelay - xLastWakeTime));
-      printRTT(buffer);
-    }
+  int Ni = 10 * Ntask + IDX;
 
-    vTaskDelay(C1);
-    //printRTT("1f\n");
+  for (int i = 0; i < Ni; i++) {
+    context->iter++;
+    context->checksum = crc8_sae_j1850((unsigned char*)context->seed + context->iter, 4);
+
+    // Log information (with burst mode)
+    char logBuffer[128];
+    TickType_t currentTick = xTaskGetTickCount();
+    snprintf(logBuffer, sizeof(logBuffer),
+             "[Task %s] Tick:%lu Iter:%ld Sum:0x%02lX\n",
+             context->name,
+             (unsigned long)currentTick,
+             context->iter,
+             context->checksum);
+
+    log_or_burst(context, logBuffer);
   }
-}
 
-void YUSH_periodic_2(void *pvParameters) {
-
-  //T2 = 21 + (1 mod 5) ms = 22 ms;
-  int T2 = pdMS_TO_TICKS(22);
-  //C2 = 3 + ((ID/3) mod 3) ms = 4 ms;
-  int C2 = pdMS_TO_TICKS(4);
-  TickType_t xLastWakeTime = xTaskGetTickCount();
-
-  char buffer[64];
-
-  for (;;) {
-    TickType_t beforeDelay = xTaskGetTickCount();
-    xTaskDelayUntil(&xLastWakeTime, T2);
-    TickType_t afterDelay = xTaskGetTickCount();
-
-    if ((long)(afterDelay - xLastWakeTime) > 0) {
-      snprintf(buffer, sizeof(buffer), "2s: expected=%lu, actual=%lu, diff=%ld\n",
-          (unsigned long)xLastWakeTime,
-          (unsigned long)afterDelay,
-          (long)(afterDelay - xLastWakeTime));
-      printRTT(buffer);
-    }
-
-    vTaskDelay(C2);
-    //printRTT("1f\n");
+  for (int i = 0; i < base_cycles + 800 * Ni; i++) {
+    __NOP();
   }
-}
 
-void YUSH_periodic_3(void *pvParameters) {
-
-  //T3 = 34 + (1 mod 9) ms = 35 ms;
-  int T3 = pdMS_TO_TICKS(35);
-  //C3 = 4 + ((ID/5) mod 3) ms = 5 ms;
-  int C3 = pdMS_TO_TICKS(5);
-  TickType_t xLastWakeTime = xTaskGetTickCount();
-
-  char buffer[64];
-
-  for (;;) {
-    TickType_t beforeDelay = xTaskGetTickCount();
-    xTaskDelayUntil(&xLastWakeTime, T3);
-    TickType_t afterDelay = xTaskGetTickCount();
-
-    if ((long)(afterDelay - xLastWakeTime) > 0) {
-      snprintf(buffer, sizeof(buffer), "3s: expected=%lu, actual=%lu, diff=%ld\n",
-          (unsigned long)xLastWakeTime,
-          (unsigned long)afterDelay,
-          (long)(afterDelay - xLastWakeTime));
-      printRTT(buffer);
-    }
-
-    vTaskDelay(C3);
-    //printRTT("1f\n");
+  if (context->bcnt > 0) {
+    burst_flush(context);
   }
-}
+  printRTT("Task finished");
 
+  vPortFree(context);
+  vPortFree(profile);
+
+  vTaskDelete(NULL);
+}
 
 /* USER CODE END 0 */
 
@@ -169,7 +134,7 @@ int main(void)
   HAL_Init();
 
   /* USER CODE BEGIN Init */
-
+  BaseType_t result = pdFAIL;
   /* USER CODE END Init */
 
   /* Configure the system clock */
@@ -181,12 +146,12 @@ int main(void)
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
   /* USER CODE BEGIN 2 */
-  uint32_t cpuFreq = HAL_RCC_GetHCLKFreq();
-  SEGGER_RTT_printf(0, "CPU Frequency: %lu Hz\n", cpuFreq);
-  //Priority 1 mod 2 != 0 -> T2 > T1 > T3
-  xTaskCreate(YUSH_periodic_1, "periodic 1", 128, NULL, configMAX_PRIORITIES - 2, NULL);
-  xTaskCreate(YUSH_periodic_2, "periodic 2", 256, NULL, configMAX_PRIORITIES - 1, NULL);
-  xTaskCreate(YUSH_periodic_3, "periodic 3", 128, NULL, configMAX_PRIORITIES - 3, NULL);
+  for (int i = 0; i < 4; i++) {
+    result = xTaskCreate(vWorker, "Task", 1024, (void*)(uintptr_t)i, 1, NULL);
+    if (result != pdPASS) {
+      Error_Handler();
+    }
+  }
   vTaskStartScheduler();
   Error_Handler();
   /* USER CODE END 2 */
@@ -321,6 +286,7 @@ void Error_Handler(void)
   __disable_irq();
   while (1)
   {
+    printRTT("[CRITICAL ERROR]\n");
   }
   /* USER CODE END Error_Handler_Debug */
 }

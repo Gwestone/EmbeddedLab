@@ -35,9 +35,13 @@ extern "C" {
 #include "task.h"
 #include "SEGGER_RTT.h"
 #include "utils.h"
+#include "task_context.h"
+#include "profile.h"
 
 /* USER CODE END Includes */
-
+#define IDX (uint32_t)1
+#define base_cycles (uint32_t)17200
+#define BURST_SIZE 1
 /* Exported types ------------------------------------------------------------*/
 /* USER CODE BEGIN ET */
 
