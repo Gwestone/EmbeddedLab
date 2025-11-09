@@ -56,3 +56,30 @@ void log_or_burst(task_context_t* ctx, const char* message) {
         burst_flush(ctx);
     }
 }
+
+SemaphoreHandle_t printfMutex;
+
+void init_mprintf() {
+    if (printfMutex != NULL) {
+        printf("mutex already initialized");
+        Error_Handler();
+    }
+    printfMutex = xSemaphoreCreateMutex();
+}
+
+void mprintf(const char *format, ...) {
+    if (printfMutex == NULL) {
+        printf("no mutex initialized");
+    }
+    va_list args;
+    char buffer[256];
+
+    va_start(args, format);
+    int len = vsnprintf(buffer, sizeof(buffer), format, args);
+    va_end(args);
+
+    if (xSemaphoreTake(printfMutex, portMAX_DELAY) == pdPASS) {
+        SEGGER_RTT_Write(0, buffer, len);
+        xSemaphoreGive(printfMutex);
+    }
+}

@@ -37,6 +37,11 @@ extern "C" {
 #include "utils.h"
 #include "task_context.h"
 #include "profile.h"
+#include <stdio.h>
+#include <string.h>
+
+#include "queue.h"
+#include "semphr.h"
 
 /* USER CODE END Includes */
 #define IDX (uint32_t)1

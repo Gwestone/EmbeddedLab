@@ -19,11 +19,6 @@
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
 
-#include <stdio.h>
-#include <string.h>
-
-#include "queue.h"
-
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 
@@ -55,7 +50,7 @@ void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 /* USER CODE BEGIN PFP */
 
-QueueHandle_t queue;
+SemaphoreHandle_t binarySemaphore, counterSemaphore;
 
 /* USER CODE END PFP */
 
@@ -73,23 +68,42 @@ void vApplicationMallocFailedHook(void) {
   }
 }
 
-void Producer(void *pvParameters) {
+void Producer_Bin(void *pvParameters) {
   TickType_t start = xTaskGetTickCount();
-  char* messageToSend = "ping";
   while (1) {
-    xQueueSend(queue, &messageToSend, pdMS_TO_TICKS(1000));
+    xSemaphoreGive(binarySemaphore);
     xTaskDelayUntil(&start, pdMS_TO_TICKS(1000));
   }
 }
 
-void Consumer(void *pvParameters) {
-  char* message;
+void Consumer_Bin(void *pvParameters) {
   while (1) {
-    if (xQueueReceive(queue, &message, pdMS_TO_TICKS(1000)) == pdPASS) {
-      printf("[Recv: %ld] Received message: %s\n", (unsigned long)xTaskGetTickCount(), message);
+    if (xSemaphoreTake(binarySemaphore, 1000) == pdPASS) {
+      mprintf("[Recv: %ld] semaphore is unlocked: %s\n", (unsigned long)xTaskGetTickCount());
     }
   }
 }
+
+void Producer_Count(void *pvParameters) {
+  TickType_t start = xTaskGetTickCount();
+  while (1) {
+    xSemaphoreGive(counterSemaphore);
+    xTaskDelayUntil(&start, pdMS_TO_TICKS(1000));
+    xSemaphoreGive(counterSemaphore);
+    mprintf("[Send: %ld] unlocking counting semaphore: %s\n", (unsigned long)xTaskGetTickCount());
+  }
+}
+
+void Consumer_Count(void *pvParameters) {
+  while (1) {
+    if (xSemaphoreTake(counterSemaphore, 1000) == pdPASS) {
+      if (xSemaphoreTake(counterSemaphore, 1000) == pdPASS) {
+        mprintf("[Recv: %ld] counting semaphore is unlocked: %s\n", (unsigned long)xTaskGetTickCount());
+      }
+    }
+  }
+}
+
 
 /* USER CODE END 0 */
 
@@ -101,7 +115,7 @@ int main(void)
 {
 
   /* USER CODE BEGIN 1 */
-
+  init_mprintf();
   /* USER CODE END 1 */
 
   /* MCU Configuration--------------------------------------------------------*/
@@ -123,14 +137,25 @@ int main(void)
   MX_GPIO_Init();
   /* USER CODE BEGIN 2 */
 
-  queue = xQueueCreate(10, sizeof(char*));
+  binarySemaphore = xSemaphoreCreateBinary();
+  counterSemaphore = xSemaphoreCreateCounting(10, 0);
 
-  result = xTaskCreate(Producer, "Producer", 512, NULL, 1, NULL);
+  result = xTaskCreate(Producer_Bin, "Producer", 512, NULL, 1, NULL);
   if (result != pdPASS) {
     Error_Handler();
   }
 
-  result = xTaskCreate(Consumer, "Consumer", 512, NULL, 1, NULL);
+  result = xTaskCreate(Consumer_Bin, "Consumer", 512, NULL, 1, NULL);
+  if (result != pdPASS) {
+    Error_Handler();
+  }
+
+  result = xTaskCreate(Producer_Count, "Producer", 512, NULL, 1, NULL);
+  if (result != pdPASS) {
+    Error_Handler();
+  }
+
+  result = xTaskCreate(Consumer_Count, "Consumer", 512, NULL, 1, NULL);
   if (result != pdPASS) {
     Error_Handler();
   }
