@@ -19,6 +19,8 @@
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
 
+#include <stdio.h>
+
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 
@@ -66,12 +68,87 @@ void vApplicationMallocFailedHook(void) {
   }
 }
 
-void periodic(void *pvParameters) {
+void YUSH_periodic_1(void *pvParameters) {
+  const TickType_t T1 = pdMS_TO_TICKS(140);
+  const TickType_t C1 = pdMS_TO_TICKS(30);
+  TickType_t xLastWakeTime = xTaskGetTickCount();
+
+  char buffer[64];
+
   for (;;) {
-    HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_13);
-    vTaskDelay(100);
+    TickType_t beforeDelay = xTaskGetTickCount();
+    xTaskDelayUntil(&xLastWakeTime, T1);
+    TickType_t afterDelay = xTaskGetTickCount();
+
+    if ((long)(afterDelay - xLastWakeTime) > 0) {
+      snprintf(buffer, sizeof(buffer), "1s: expected=%lu, actual=%lu, diff=%ld\n",
+          (unsigned long)xLastWakeTime,
+          (unsigned long)afterDelay,
+          (long)(afterDelay - xLastWakeTime));
+      printRTT(buffer);
+    }
+
+    vTaskDelay(C1);
+    //printRTT("1f\n");
   }
 }
+
+void YUSH_periodic_2(void *pvParameters) {
+
+  //T2 = 21 + (1 mod 5) ms = 22 ms;
+  int T2 = pdMS_TO_TICKS(22);
+  //C2 = 3 + ((ID/3) mod 3) ms = 4 ms;
+  int C2 = pdMS_TO_TICKS(4);
+  TickType_t xLastWakeTime = xTaskGetTickCount();
+
+  char buffer[64];
+
+  for (;;) {
+    TickType_t beforeDelay = xTaskGetTickCount();
+    xTaskDelayUntil(&xLastWakeTime, T2);
+    TickType_t afterDelay = xTaskGetTickCount();
+
+    if ((long)(afterDelay - xLastWakeTime) > 0) {
+      snprintf(buffer, sizeof(buffer), "2s: expected=%lu, actual=%lu, diff=%ld\n",
+          (unsigned long)xLastWakeTime,
+          (unsigned long)afterDelay,
+          (long)(afterDelay - xLastWakeTime));
+      printRTT(buffer);
+    }
+
+    vTaskDelay(C2);
+    //printRTT("1f\n");
+  }
+}
+
+void YUSH_periodic_3(void *pvParameters) {
+
+  //T3 = 34 + (1 mod 9) ms = 35 ms;
+  int T3 = pdMS_TO_TICKS(35);
+  //C3 = 4 + ((ID/5) mod 3) ms = 5 ms;
+  int C3 = pdMS_TO_TICKS(5);
+  TickType_t xLastWakeTime = xTaskGetTickCount();
+
+  char buffer[64];
+
+  for (;;) {
+    TickType_t beforeDelay = xTaskGetTickCount();
+    xTaskDelayUntil(&xLastWakeTime, T3);
+    TickType_t afterDelay = xTaskGetTickCount();
+
+    if ((long)(afterDelay - xLastWakeTime) > 0) {
+      snprintf(buffer, sizeof(buffer), "3s: expected=%lu, actual=%lu, diff=%ld\n",
+          (unsigned long)xLastWakeTime,
+          (unsigned long)afterDelay,
+          (long)(afterDelay - xLastWakeTime));
+      printRTT(buffer);
+    }
+
+    vTaskDelay(C3);
+    //printRTT("1f\n");
+  }
+}
+
 
 /* USER CODE END 0 */
 
@@ -104,10 +181,12 @@ int main(void)
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
   /* USER CODE BEGIN 2 */
-  BaseType_t result = xTaskCreate(periodic, "periodic", 512, NULL, configMAX_PRIORITIES - 1, NULL);
-  if (result != pdPASS) {
-    Error_Handler();
-  }
+  uint32_t cpuFreq = HAL_RCC_GetHCLKFreq();
+  SEGGER_RTT_printf(0, "CPU Frequency: %lu Hz\n", cpuFreq);
+  //Priority 1 mod 2 != 0 -> T2 > T1 > T3
+  xTaskCreate(YUSH_periodic_1, "periodic 1", 128, NULL, configMAX_PRIORITIES - 2, NULL);
+  xTaskCreate(YUSH_periodic_2, "periodic 2", 256, NULL, configMAX_PRIORITIES - 1, NULL);
+  xTaskCreate(YUSH_periodic_3, "periodic 3", 128, NULL, configMAX_PRIORITIES - 3, NULL);
   vTaskStartScheduler();
   Error_Handler();
   /* USER CODE END 2 */
@@ -151,8 +230,8 @@ void SystemClock_Config(void)
   RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
   RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSE;
   RCC_OscInitStruct.PLL.PLLM = 12;
-  RCC_OscInitStruct.PLL.PLLN = 72;
-  RCC_OscInitStruct.PLL.PLLP = RCC_PLLP_DIV6;
+  RCC_OscInitStruct.PLL.PLLN = 96;
+  RCC_OscInitStruct.PLL.PLLP = RCC_PLLP_DIV2;
   RCC_OscInitStruct.PLL.PLLQ = 4;
   if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
   {
@@ -168,7 +247,7 @@ void SystemClock_Config(void)
   RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV2;
   RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV1;
 
-  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_0) != HAL_OK)
+  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_3) != HAL_OK)
   {
     Error_Handler();
   }

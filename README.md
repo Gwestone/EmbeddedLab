@@ -7,5 +7,8 @@ to use it as template in next freeRTOS Embedded sytems course assignments
 - copy directories License annd Source from your local installation of FreeRTOS to @/Libs/FreeRTOS in the base of project
 - now project should be building with the led blinking if your system uses C13 pin for LED
 
-## To reuse CMAKELists.txt
+## To reuse project
 - change FREERTOS_PORTABLE_SOURCES variable in cmakelists.txt to new port
+## Check if everything is ok
+- pull branch master or lab_1
+- if it prints warnings about task's timings misalighnment something into rtt console then project is misconfigured

@@ -8,6 +8,21 @@ cmake_minimum_required(VERSION 3.22)
 #
 
 set(LIBS_DIRECTORY ${CMAKE_CURRENT_LIST_DIR}/Libs)
+
+# RTT CONFIG -----------------------------------------------------------------
+
+set(RTT_DIR ${LIBS_DIRECTORY}/RTT)
+set(RTT_SOURCES
+        ${RTT_DIR}/RTT/SEGGER_RTT.c
+        ${RTT_DIR}/RTT/SEGGER_RTT_printf.c
+        ${RTT_DIR}/Syscalls/SEGGER_RTT_Syscalls_GCC.c)
+
+set(RTT_INCLUDE_DIR
+        ${RTT_DIR}/Config
+        ${RTT_DIR}/RTT)
+
+# FREERTOS CONFIG -------------------------------------------------------------
+
 set(FREERTOS_SOURCES_DIR ${LIBS_DIRECTORY}/FreeRTOS/Source)
 set(FREERTOS_INCLUDE_DIR ${FREERTOS_SOURCES_DIR}/include)
 
@@ -66,7 +81,9 @@ message("Build type: " ${CMAKE_BUILD_TYPE})
 enable_language(C ASM)
 
 # Create an executable object type
-add_executable(${CMAKE_PROJECT_NAME})
+add_executable(${CMAKE_PROJECT_NAME}
+        Core/Inc/utils.h
+        Core/Src/utils.c)
 
 # Add STM32CubeMX generated sources
 add_subdirectory(cmake/stm32cubemx)
@@ -82,6 +99,7 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
         #${FREERTOS_SOURCES}
         ${FREERTOS_PORTABLE_SOURCES}
         ${FREERTOS_MEMORY_MANAGEMENT_SCHEME}
+        ${RTT_SOURCES}
 )
 
 add_subdirectory(${FREERTOS_SOURCES_DIR})
@@ -91,6 +109,7 @@ target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
     # Add user defined include paths
         ${FREERTOS_INCLUDE_DIR}
         ${FREERTOS_PORTABLE_DIR}
+        ${RTT_INCLUDE_DIR}
 )
 
 # Add project symbols (macros)
