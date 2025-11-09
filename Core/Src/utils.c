@@ -1,5 +1,6 @@
 #include "utils.h"
 
+#include <stdio.h>
 #include <string.h>
 
 void printRTT(char *message) {
@@ -39,7 +40,7 @@ uint8_t crc8_sae_j1850(unsigned char const *data, size_t len) {
 
 void burst_flush(task_context_t* ctx) {
     for (int i = 0; i < ctx->bcnt; i++) {
-        printRTT(ctx->line1[i]);
+        printf("%s", ctx->line1[i]);
     }
     ctx->bcnt = 0;
 }

@@ -71,8 +71,10 @@ void vApplicationMallocFailedHook(void) {
 
 void vWorker(void *pvParameters) {
   int Ntask = (int)(intptr_t)pvParameters;
+  const char *taskName = pcTaskGetName(NULL);
+
   task_context_t* context = pvPortMalloc(sizeof(task_context_t));
-  strcpy(context->name, "LAB2");
+  strcpy(context->name, taskName);
   context->iter = 0;
   context->bcnt = 0;
 
@@ -87,7 +89,6 @@ void vWorker(void *pvParameters) {
     context->iter++;
     context->checksum = crc8_sae_j1850((unsigned char*)context->seed + context->iter, 4);
 
-    // Log information (with burst mode)
     char logBuffer[128];
     TickType_t currentTick = xTaskGetTickCount();
     snprintf(logBuffer, sizeof(logBuffer),
@@ -107,7 +108,7 @@ void vWorker(void *pvParameters) {
   if (context->bcnt > 0) {
     burst_flush(context);
   }
-  printRTT("Task finished");
+  printf("Task: %d finished", Ntask);
 
   vPortFree(context);
   vPortFree(profile);
@@ -147,7 +148,11 @@ int main(void)
   MX_GPIO_Init();
   /* USER CODE BEGIN 2 */
   for (int i = 0; i < 4; i++) {
-    result = xTaskCreate(vWorker, "Task", 1024, (void*)(uintptr_t)i, 1, NULL);
+
+    char task_name[] = "Task  ";
+    task_name[5] = (char)((int)'0' + i);
+
+    result = xTaskCreate(vWorker, task_name, 1024, (void*)(uintptr_t)i, 1, NULL);
     if (result != pdPASS) {
       Error_Handler();
     }
