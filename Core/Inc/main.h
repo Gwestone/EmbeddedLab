@@ -51,7 +51,9 @@ extern "C" {
 
 #define EVENT_TEMP_CONTROLLER_OK (uint32_t)(1<<1)
 #define EVENT_TEMP_CONTROLLER_OVERHEAT (uint32_t)(1<<0)
-#define EVENT_BUFFER_FAIL (uint32_t)(1<<3)
+#define EVENT_BUFFER_FAIL (uint32_t)(1<<2)
+#define EVENT_INCREASE_TRESHHOLD (uint32_t)(1<<3)
+#define EVENT_DECREASE_TRESHHOLD (uint32_t)(1<<4)
 /* Exported types ------------------------------------------------------------*/
 /* USER CODE BEGIN ET */
 

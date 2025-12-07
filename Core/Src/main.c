@@ -88,13 +88,21 @@ void FilterTask(void *pvParameters) {
   uint32_t message_to_send;
   int received_temp = 0;
   int message_size = 0;
+  int treshold_temp = 15000;
   while (1) {
     message_size = xStreamBufferReceive(sensorStreamBuffer, &received_temp, sizeof(int), portMAX_DELAY);
-    if (received_temp < 17000) message_to_send = EVENT_TEMP_CONTROLLER_OK;
-    else message_to_send = EVENT_TEMP_CONTROLLER_OVERHEAT;
-    xMessageBufferSend(appMessageBuffer, &message_to_send, sizeof(uint32_t), portMAX_DELAY);
     if (message_size == 0) {
       xEventGroupSetBits(eventGroup, EVENT_BUFFER_FAIL);
+    }
+
+    if (received_temp < treshold_temp) message_to_send = EVENT_TEMP_CONTROLLER_OK;
+    else message_to_send = EVENT_TEMP_CONTROLLER_OVERHEAT;
+    xMessageBufferSend(appMessageBuffer, &message_to_send, sizeof(uint32_t), portMAX_DELAY);
+    if (xEventGroupGetBits(eventGroup) & EVENT_DECREASE_TRESHHOLD) {
+      treshold_temp = 14000;
+    }
+    if (xEventGroupGetBits(eventGroup) & EVENT_INCREASE_TRESHHOLD) {
+      treshold_temp = 15000;
     }
   }
 }
@@ -103,8 +111,14 @@ void ConfigTask(void *pvParameters) {
   int received_message = 0;
   while (1) {
     xMessageBufferReceive(appMessageBuffer, &received_message, sizeof(int), portMAX_DELAY);
-    if (received_message & EVENT_TEMP_CONTROLLER_OVERHEAT) mprintf("sensor is overheating, immediately take action\n");
-    if (received_message & EVENT_TEMP_CONTROLLER_OK) mprintf("sensor temp is in optimal operation conditions\n");
+    if (received_message & EVENT_TEMP_CONTROLLER_OVERHEAT) {
+      xEventGroupSetBits(eventGroup, EVENT_INCREASE_TRESHHOLD);
+      mprintf("sensor is overheating, immediately take action\n");
+    }
+    if (received_message & EVENT_TEMP_CONTROLLER_OK) {
+      xEventGroupSetBits(eventGroup, EVENT_DECREASE_TRESHHOLD);
+      mprintf("sensor temp is in optimal operation conditions\n");
+    }
   }
 }
 
