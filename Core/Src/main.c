@@ -74,7 +74,7 @@ void SensorTask(void *pvParameters) {
   while (1) {
     xTaskDelayUntil(&start, pdMS_TO_TICKS(200));
     xTaskNotify(controlTaskHandle, temp, eSetValueWithOverwrite);
-    if (temp < 25000) temp += 100;
+    if (temp < 17000) temp += 100;
     else temp = 10000;
   }
 }
@@ -83,7 +83,7 @@ void ControllerTask(void *pvParameters) {
   int received_temp = 0;
   while (1) {
     if (xTaskNotifyWait(0, 0xFFFFFFFF, &received_temp, portMAX_DELAY)) {
-      if (received_temp > 20000) {
+      if (received_temp > 16000) {
         xTaskNotify(displayTaskHandle, EVENT_TEMP_CONTROLLER_OVERHEAT, eSetBits);
       } else {
         xTaskNotify(displayTaskHandle, EVENT_TEMP_CONTROLLER_OK, eSetBits);
