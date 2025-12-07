@@ -50,8 +50,6 @@ void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 /* USER CODE BEGIN PFP */
 
-SemaphoreHandle_t binarySemaphore, counterSemaphore;
-
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -68,38 +66,38 @@ void vApplicationMallocFailedHook(void) {
   }
 }
 
-void Producer_Bin(void *pvParameters) {
+xTaskHandle controlTaskHandle, displayTaskHandle;
+
+void SensorTask(void *pvParameters) {
   TickType_t start = xTaskGetTickCount();
+  int temp = 15000;
   while (1) {
-    xSemaphoreGive(binarySemaphore);
-    xTaskDelayUntil(&start, pdMS_TO_TICKS(1000));
+    xTaskDelayUntil(&start, pdMS_TO_TICKS(200));
+    xTaskNotify(controlTaskHandle, temp, eSetValueWithOverwrite);
+    if (temp < 25000) temp += 100;
+    else temp = 10000;
   }
 }
 
-void Consumer_Bin(void *pvParameters) {
+void ControllerTask(void *pvParameters) {
+  int received_temp = 0;
   while (1) {
-    if (xSemaphoreTake(binarySemaphore, 1000) == pdPASS) {
-      mprintf("[Recv: %ld] semaphore is unlocked: %s\n", (unsigned long)xTaskGetTickCount());
+    if (xTaskNotifyWait(0, 0xFFFFFFFF, &received_temp, portMAX_DELAY)) {
+      if (received_temp > 20000) {
+        xTaskNotify(displayTaskHandle, EVENT_TEMP_CONTROLLER_OVERHEAT, eSetBits);
+      } else {
+        xTaskNotify(displayTaskHandle, EVENT_TEMP_CONTROLLER_OK, eSetBits);
+      }
     }
   }
 }
 
-void Producer_Count(void *pvParameters) {
-  TickType_t start = xTaskGetTickCount();
+void DisplayTask(void *pvParameters) {
+  int received_flags = 0;
   while (1) {
-    xSemaphoreGive(counterSemaphore);
-    xTaskDelayUntil(&start, pdMS_TO_TICKS(1000));
-    xSemaphoreGive(counterSemaphore);
-    mprintf("[Send: %ld] unlocking counting semaphore: %s\n", (unsigned long)xTaskGetTickCount());
-  }
-}
-
-void Consumer_Count(void *pvParameters) {
-  while (1) {
-    if (xSemaphoreTake(counterSemaphore, 1000) == pdPASS) {
-      if (xSemaphoreTake(counterSemaphore, 1000) == pdPASS) {
-        mprintf("[Recv: %ld] counting semaphore is unlocked: %s\n", (unsigned long)xTaskGetTickCount());
-      }
+    if (xTaskNotifyWait(0, 0xFFFFFFFF, &received_flags, portMAX_DELAY)) {
+      if (received_flags & EVENT_TEMP_CONTROLLER_OVERHEAT) mprintf("sensor is overheating, immediately take action\n");
+      if (received_flags & EVENT_TEMP_CONTROLLER_OK) mprintf("sensor temp is in optimal operation conditions\n");
     }
   }
 }
@@ -137,25 +135,17 @@ int main(void)
   MX_GPIO_Init();
   /* USER CODE BEGIN 2 */
 
-  binarySemaphore = xSemaphoreCreateBinary();
-  counterSemaphore = xSemaphoreCreateCounting(10, 0);
-
-  result = xTaskCreate(Producer_Bin, "Producer", 512, NULL, 1, NULL);
+  result = xTaskCreate(SensorTask, "SensorTask", 512, NULL, 1, NULL);
   if (result != pdPASS) {
     Error_Handler();
   }
 
-  result = xTaskCreate(Consumer_Bin, "Consumer", 512, NULL, 1, NULL);
+  result = xTaskCreate(ControllerTask, "ControllerTask", 512, NULL, 1, &controlTaskHandle);
   if (result != pdPASS) {
     Error_Handler();
   }
 
-  result = xTaskCreate(Producer_Count, "Producer", 512, NULL, 1, NULL);
-  if (result != pdPASS) {
-    Error_Handler();
-  }
-
-  result = xTaskCreate(Consumer_Count, "Consumer", 512, NULL, 1, NULL);
+  result = xTaskCreate(DisplayTask, "DisplayTask", 512, NULL, 1, &displayTaskHandle);
   if (result != pdPASS) {
     Error_Handler();
   }
