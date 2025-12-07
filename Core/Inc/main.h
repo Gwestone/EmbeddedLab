@@ -48,8 +48,8 @@ extern "C" {
 #define base_cycles (uint32_t)17200
 #define BURST_SIZE 1
 
-#define EVENT_TEMP_CONTROLLER_OK (uint32_t)(1<<0)
-#define EVENT_TEMP_CONTROLLER_OVERHEAT (uint32_t)(0<<0)
+#define EVENT_TEMP_CONTROLLER_OK (uint32_t)(2<<0)
+#define EVENT_TEMP_CONTROLLER_OVERHEAT (uint32_t)(1<<0)
 /* Exported types ------------------------------------------------------------*/
 /* USER CODE BEGIN ET */
 
