@@ -19,6 +19,9 @@
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
 
+#include "event_groups.h"
+#include "stream_buffer.h"
+
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 
@@ -66,38 +69,50 @@ void vApplicationMallocFailedHook(void) {
   }
 }
 
-xTaskHandle controlTaskHandle, displayTaskHandle;
+StreamBufferHandle_t sensorStreamBuffer;
+MessageBufferHandle_t appMessageBuffer;
+EventGroupHandle_t eventGroup;
 
 void SensorTask(void *pvParameters) {
   TickType_t start = xTaskGetTickCount();
   int temp = 15000;
   while (1) {
-    xTaskDelayUntil(&start, pdMS_TO_TICKS(200));
-    xTaskNotify(controlTaskHandle, temp, eSetValueWithOverwrite);
+    xTaskDelayUntil(&start, pdMS_TO_TICKS(100));
+    xStreamBufferSend(sensorStreamBuffer, &temp, sizeof(int), portMAX_DELAY);
     if (temp < 17000) temp += 100;
     else temp = 10000;
   }
 }
 
-void ControllerTask(void *pvParameters) {
+void FilterTask(void *pvParameters) {
+  uint32_t message_to_send;
   int received_temp = 0;
+  int message_size = 0;
   while (1) {
-    if (xTaskNotifyWait(0, 0xFFFFFFFF, &received_temp, portMAX_DELAY)) {
-      if (received_temp > 16000) {
-        xTaskNotify(displayTaskHandle, EVENT_TEMP_CONTROLLER_OVERHEAT, eSetBits);
-      } else {
-        xTaskNotify(displayTaskHandle, EVENT_TEMP_CONTROLLER_OK, eSetBits);
-      }
+    message_size = xStreamBufferReceive(sensorStreamBuffer, &received_temp, sizeof(int), portMAX_DELAY);
+    if (received_temp < 17000) message_to_send = EVENT_TEMP_CONTROLLER_OK;
+    else message_to_send = EVENT_TEMP_CONTROLLER_OVERHEAT;
+    xMessageBufferSend(appMessageBuffer, &message_to_send, sizeof(uint32_t), portMAX_DELAY);
+    if (message_size == 0) {
+      xEventGroupSetBits(eventGroup, EVENT_BUFFER_FAIL);
     }
   }
 }
 
-void DisplayTask(void *pvParameters) {
-  int received_flags = 0;
+void ConfigTask(void *pvParameters) {
+  int received_message = 0;
   while (1) {
-    if (xTaskNotifyWait(0, 0xFFFFFFFF, &received_flags, portMAX_DELAY)) {
-      if (received_flags & EVENT_TEMP_CONTROLLER_OVERHEAT) mprintf("sensor is overheating, immediately take action\n");
-      if (received_flags & EVENT_TEMP_CONTROLLER_OK) mprintf("sensor temp is in optimal operation conditions\n");
+    xMessageBufferReceive(appMessageBuffer, &received_message, sizeof(int), portMAX_DELAY);
+    if (received_message & EVENT_TEMP_CONTROLLER_OVERHEAT) mprintf("sensor is overheating, immediately take action\n");
+    if (received_message & EVENT_TEMP_CONTROLLER_OK) mprintf("sensor temp is in optimal operation conditions\n");
+  }
+}
+
+void SupervisorTask(void *pvParameters) {
+  while (1) {
+    EventBits_t event_flag = xEventGroupWaitBits(eventGroup, EVENT_BUFFER_FAIL, pdTRUE, pdFALSE, portMAX_DELAY);
+    if (event_flag & EVENT_BUFFER_FAIL) {
+      mprintf("buffer failed to read\n");
     }
   }
 }
@@ -135,17 +150,26 @@ int main(void)
   MX_GPIO_Init();
   /* USER CODE BEGIN 2 */
 
+  sensorStreamBuffer = xStreamBufferCreate(1024, sizeof(int));
+  appMessageBuffer = xMessageBufferCreate(128);
+  eventGroup = xEventGroupCreate();
+
   result = xTaskCreate(SensorTask, "SensorTask", 512, NULL, 1, NULL);
   if (result != pdPASS) {
     Error_Handler();
   }
 
-  result = xTaskCreate(ControllerTask, "ControllerTask", 512, NULL, 1, &controlTaskHandle);
+  result = xTaskCreate(FilterTask, "FilterTask", 512, NULL, 1, NULL);
   if (result != pdPASS) {
     Error_Handler();
   }
 
-  result = xTaskCreate(DisplayTask, "DisplayTask", 512, NULL, 1, &displayTaskHandle);
+  result = xTaskCreate(ConfigTask, "ConfigTask", 512, NULL, 1, NULL);
+  if (result != pdPASS) {
+    Error_Handler();
+  }
+
+  result = xTaskCreate(SupervisorTask, "SupervisorTask", 512, NULL, 1, NULL);
   if (result != pdPASS) {
     Error_Handler();
   }
