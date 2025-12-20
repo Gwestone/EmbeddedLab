@@ -42,6 +42,8 @@
 /* Private variables ---------------------------------------------------------*/
 TIM_HandleTypeDef htim2;
 
+UART_HandleTypeDef huart1;
+
 /* USER CODE BEGIN PV */
 
 /* USER CODE END PV */
@@ -50,6 +52,7 @@ TIM_HandleTypeDef htim2;
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_TIM2_Init(void);
+static void MX_USART1_UART_Init(void);
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
@@ -68,15 +71,64 @@ void vApplicationMallocFailedHook(void) {
   }
 }
 
+TaskHandle_t mainTaskHandle;
+
+uint16_t currentMessagePosition_IRQ = 1;
+char messageBuffer_IRQ[1024] = {0};
+
+void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
+  if (huart == &huart1) {
+    if (HAL_UART_Receive_IT(&huart1, (uint8_t*)(messageBuffer_IRQ + currentMessagePosition_IRQ), 1) == HAL_OK) {
+
+      char receivedSymbol = messageBuffer_IRQ[currentMessagePosition_IRQ - 1];
+
+      if (receivedSymbol == '\n' || receivedSymbol == '\r') {
+        messageBuffer_IRQ[currentMessagePosition_IRQ] = '\0';
+        currentMessagePosition_IRQ = 1;
+
+        xTaskNotifyFromISR(mainTaskHandle, (uint32_t)messageBuffer_IRQ, eSetValueWithOverwrite, NULL);
+      }else {
+        currentMessagePosition_IRQ++;
+      }
+
+    }
+  }
+}
+
+void ReadTask(void *pvParameters) {
+  uint16_t currentMessagePosition = 0;
+  char* messageBuffer = pvPortMalloc(1024);
+  char* transmitBuffer = pvPortMalloc(1024 + 15);
+  while(1) {
+    if (HAL_UART_Receive(&huart1, (uint8_t*)(messageBuffer + currentMessagePosition), 1, 1000) == HAL_OK) {
+
+      if (messageBuffer[currentMessagePosition] == '\n' || messageBuffer[currentMessagePosition] == '\r') {
+        currentMessagePosition = 0;
+
+        sprintf(transmitBuffer, "Received data: %s\n\r", messageBuffer);
+        HAL_UART_Transmit(&huart1, (uint8_t*)transmitBuffer, 1024, 1000);
+        xTaskNotify(mainTaskHandle, parseMessage(messageBuffer), eSetValueWithOverwrite);
+      }else {
+        currentMessagePosition++;
+      }
+
+    }
+  }
+}
+
 void MainTask(void *pvParameters) {
-  float pseudoSine = 0.0f;
+  uint32_t rec_value;
+  char* transmitBuffer = pvPortMalloc(1024);
   while (1) {
     vTaskDelay(pdMS_TO_TICKS(100));
-    pseudoSine += 0.1f;
-    if (pseudoSine > 3.14f) {
-      pseudoSine = 0.0f;
+    if (xTaskNotifyWait(0, INT32_MAX, &rec_value, portMAX_DELAY) == pdTRUE) {
+      const int16_t cycles_value = parseMessage((char*)rec_value);
+      if (cycles_value >= 0) {
+        TIM2->CCR1 = (uint32_t)cycles_value;
+      }
+      snprintf(transmitBuffer, 1024, "Received data: %s\r\n", (char*) rec_value);
+      HAL_UART_Transmit(&huart1, (uint8_t*)transmitBuffer, 1024, 1000);
     }
-    TIM2->CCR1 = (uint32_t)(2000.0f * sinf(pseudoSine));
   }
 }
 
@@ -111,14 +163,22 @@ int main(void)
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
   MX_TIM2_Init();
+  MX_USART1_UART_Init();
   /* USER CODE BEGIN 2 */
 
   HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_1);
 
-  result = xTaskCreate(MainTask, "DisplayTask", 512, NULL, 1, NULL);
+  result = xTaskCreate(MainTask, "MainTask", 512, NULL, 1, &mainTaskHandle);
   if (result != pdPASS) {
     Error_Handler();
   }
+
+  /*result = xTaskCreate(ReadTask, "ReadTask", 512, NULL, 1, NULL);
+  if (result != pdPASS) {
+    Error_Handler();
+  }*/
+
+  HAL_UART_Receive_IT(&huart1, (uint8_t*)(messageBuffer_IRQ), 1);
 
   vTaskStartScheduler();
   Error_Handler();
@@ -232,6 +292,39 @@ static void MX_TIM2_Init(void)
 
   /* USER CODE END TIM2_Init 2 */
   HAL_TIM_MspPostInit(&htim2);
+
+}
+
+/**
+  * @brief USART1 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_USART1_UART_Init(void)
+{
+
+  /* USER CODE BEGIN USART1_Init 0 */
+
+  /* USER CODE END USART1_Init 0 */
+
+  /* USER CODE BEGIN USART1_Init 1 */
+
+  /* USER CODE END USART1_Init 1 */
+  huart1.Instance = USART1;
+  huart1.Init.BaudRate = 115200;
+  huart1.Init.WordLength = UART_WORDLENGTH_8B;
+  huart1.Init.StopBits = UART_STOPBITS_1;
+  huart1.Init.Parity = UART_PARITY_NONE;
+  huart1.Init.Mode = UART_MODE_TX_RX;
+  huart1.Init.HwFlowCtl = UART_HWCONTROL_NONE;
+  huart1.Init.OverSampling = UART_OVERSAMPLING_16;
+  if (HAL_UART_Init(&huart1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN USART1_Init 2 */
+
+  /* USER CODE END USART1_Init 2 */
 
 }
 

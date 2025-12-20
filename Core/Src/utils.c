@@ -83,3 +83,12 @@ void mprintf(const char *format, ...) {
         xSemaphoreGive(printfMutex);
     }
 }
+
+int16_t parseMessage(char* message) {
+    char* endptr;
+    const double duty_cycle = strtod(message, &endptr);
+    if (endptr == message || (*endptr != '\0' && *endptr != '\r')) {
+        return -1;
+    }
+    return (int16_t)(2000.0 * duty_cycle);
+}

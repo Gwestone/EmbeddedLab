@@ -12,4 +12,6 @@ void log_or_burst(task_context_t* ctx, const char* message);
 void init_mprintf(void);
 void mprintf(const char *format, ...);
 
+int16_t parseMessage(char* message);
+
 #endif //FREERTOS_LAB0_UTILS_H
