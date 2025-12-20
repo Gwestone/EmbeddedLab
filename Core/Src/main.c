@@ -40,6 +40,7 @@
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
+TIM_HandleTypeDef htim2;
 
 /* USER CODE BEGIN PV */
 
@@ -48,6 +49,7 @@
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
+static void MX_TIM2_Init(void);
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
@@ -66,42 +68,17 @@ void vApplicationMallocFailedHook(void) {
   }
 }
 
-xTaskHandle controlTaskHandle, displayTaskHandle;
-
-void SensorTask(void *pvParameters) {
-  TickType_t start = xTaskGetTickCount();
-  int temp = 15000;
+void MainTask(void *pvParameters) {
+  float pseudoSine = 0.0f;
   while (1) {
-    xTaskDelayUntil(&start, pdMS_TO_TICKS(200));
-    xTaskNotify(controlTaskHandle, temp, eSetValueWithOverwrite);
-    if (temp < 17000) temp += 100;
-    else temp = 10000;
-  }
-}
-
-void ControllerTask(void *pvParameters) {
-  int received_temp = 0;
-  while (1) {
-    if (xTaskNotifyWait(0, 0xFFFFFFFF, &received_temp, portMAX_DELAY)) {
-      if (received_temp > 16000) {
-        xTaskNotify(displayTaskHandle, EVENT_TEMP_CONTROLLER_OVERHEAT, eSetBits);
-      } else {
-        xTaskNotify(displayTaskHandle, EVENT_TEMP_CONTROLLER_OK, eSetBits);
-      }
+    vTaskDelay(pdMS_TO_TICKS(100));
+    pseudoSine += 0.1f;
+    if (pseudoSine > 3.14f) {
+      pseudoSine = 0.0f;
     }
+    TIM2->CCR1 = (uint32_t)(2000.0f * sinf(pseudoSine));
   }
 }
-
-void DisplayTask(void *pvParameters) {
-  int received_flags = 0;
-  while (1) {
-    if (xTaskNotifyWait(0, 0xFFFFFFFF, &received_flags, portMAX_DELAY)) {
-      if (received_flags & EVENT_TEMP_CONTROLLER_OVERHEAT) mprintf("sensor is overheating, immediately take action\n");
-      if (received_flags & EVENT_TEMP_CONTROLLER_OK) mprintf("sensor temp is in optimal operation conditions\n");
-    }
-  }
-}
-
 
 /* USER CODE END 0 */
 
@@ -133,19 +110,12 @@ int main(void)
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
+  MX_TIM2_Init();
   /* USER CODE BEGIN 2 */
 
-  result = xTaskCreate(SensorTask, "SensorTask", 512, NULL, 1, NULL);
-  if (result != pdPASS) {
-    Error_Handler();
-  }
+  HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_1);
 
-  result = xTaskCreate(ControllerTask, "ControllerTask", 512, NULL, 1, &controlTaskHandle);
-  if (result != pdPASS) {
-    Error_Handler();
-  }
-
-  result = xTaskCreate(DisplayTask, "DisplayTask", 512, NULL, 1, &displayTaskHandle);
+  result = xTaskCreate(MainTask, "DisplayTask", 512, NULL, 1, NULL);
   if (result != pdPASS) {
     Error_Handler();
   }
@@ -217,6 +187,55 @@ void SystemClock_Config(void)
 }
 
 /**
+  * @brief TIM2 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_TIM2_Init(void)
+{
+
+  /* USER CODE BEGIN TIM2_Init 0 */
+
+  /* USER CODE END TIM2_Init 0 */
+
+  TIM_MasterConfigTypeDef sMasterConfig = {0};
+  TIM_OC_InitTypeDef sConfigOC = {0};
+
+  /* USER CODE BEGIN TIM2_Init 1 */
+
+  /* USER CODE END TIM2_Init 1 */
+  htim2.Instance = TIM2;
+  htim2.Init.Prescaler = 0;
+  htim2.Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim2.Init.Period = 2000;
+  htim2.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+  htim2.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+  if (HAL_TIM_PWM_Init(&htim2) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
+  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
+  if (HAL_TIMEx_MasterConfigSynchronization(&htim2, &sMasterConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sConfigOC.OCMode = TIM_OCMODE_PWM1;
+  sConfigOC.Pulse = 0;
+  sConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;
+  sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;
+  if (HAL_TIM_PWM_ConfigChannel(&htim2, &sConfigOC, TIM_CHANNEL_1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN TIM2_Init 2 */
+
+  /* USER CODE END TIM2_Init 2 */
+  HAL_TIM_MspPostInit(&htim2);
+
+}
+
+/**
   * @brief GPIO Initialization Function
   * @param None
   * @retval None
@@ -231,6 +250,7 @@ static void MX_GPIO_Init(void)
   /* GPIO Ports Clock Enable */
   __HAL_RCC_GPIOC_CLK_ENABLE();
   __HAL_RCC_GPIOH_CLK_ENABLE();
+  __HAL_RCC_GPIOA_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOC, GPIO_PIN_13, GPIO_PIN_RESET);

@@ -42,14 +42,10 @@ extern "C" {
 
 #include "queue.h"
 #include "semphr.h"
+#include <math.h>
 
 /* USER CODE END Includes */
-#define IDX (uint32_t)1
-#define base_cycles (uint32_t)17200
-#define BURST_SIZE 1
 
-#define EVENT_TEMP_CONTROLLER_OK (uint32_t)(2<<0)
-#define EVENT_TEMP_CONTROLLER_OVERHEAT (uint32_t)(1<<0)
 /* Exported types ------------------------------------------------------------*/
 /* USER CODE BEGIN ET */
 
@@ -63,7 +59,16 @@ extern "C" {
 /* Exported macro ------------------------------------------------------------*/
 /* USER CODE BEGIN EM */
 
+#define IDX (uint32_t)1
+#define base_cycles (uint32_t)17200
+#define BURST_SIZE 1
+
+#define EVENT_TEMP_CONTROLLER_OK (uint32_t)(2<<0)
+#define EVENT_TEMP_CONTROLLER_OVERHEAT (uint32_t)(1<<0)
+
 /* USER CODE END EM */
+
+void HAL_TIM_MspPostInit(TIM_HandleTypeDef *htim);
 
 /* Exported functions prototypes ---------------------------------------------*/
 void Error_Handler(void);
